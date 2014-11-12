@@ -7,10 +7,26 @@ import urllib2
 import urllib
 import argparse
 
+
+#
+# Make argument parser
+#
+
+def _make_argument_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--course', help='Cource id', type=str,
+                        dest='course_id', metavar='<Id>', required=True)
+    parser.add_argument('-d', '--dest', help='Destination directory path',
+                        type=str, dest='dest_dir_path', metavar='<Path>',
+                        default='./')
+    parser.add_argument('-r', '--dir', help='Remote directory path',
+                        type=str, dest='remote_dir_path', metavar='<Path>')
+    return parser
+
+
 #
 # Read user name and password
 #
-
 
 def _get_creds():
     try:
@@ -64,10 +80,58 @@ def _get_cookie(username, password):
 
     return cookie_str
 
+
+#
+# URL extractor
+#
+
+def _get_file_urls(course_id, remote_dir_path, cookie_str):
+    # Make directory URL
+    url = 'http://eclass.uoa.gr/modules/document/document.php?course=%s' \
+        % course_id
+    if remote_dir_path is not None:
+        url += '&openDir=%s' % remote_dir_path
+
+    # Get HTML
+    req = urllib2.Request(url)
+    req.add_header('Accept', 'text/html')
+    req.add_header('Cookie', cookie_str)
+    req.add_header(
+        'User-Agent',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_0) AppleWebKit/537.36'
+        + ' (KHTML, like Gecko) Chrome/38.0.2125.111 Safari/537.36'
+    )
+    resp = urllib2.urlopen(req)
+    if resp is None or resp.code / 100 != 2:
+        return []
+    html_str = resp.read()
+    resp.close()
+
+    # Compile regular expression
+    reg_exp = re.compile(
+        r'href=\'/modules/document/document\.php\?course=([A-Z0-9]*)&amp;download=([/a-zA-Z0-9\.]*)\'',
+        re.MULTILINE & re.UNICODE & re.VERBOSE
+    )
+
+    # Run regular expressions
+    matches = re.findall(reg_exp, html_str)
+    if matches is None:
+        return []
+
+    ret_val = []
+    for course_id, path in matches:
+        if path == '/' or path == remote_dir_path:  # ignore top level
+            continue
+        url = 'http://eclass.uoa.gr/modules/document/document.php'
+        url += '?cources=%s&download=%s' % (course_id, path)
+        ret_val.append(url)
+
+    return ret_val
+
+
 #
 # Download file
 #
-
 
 def _get_filename(resp_msg):
     if not resp_msg.getheaders('Content-Disposition'):
@@ -143,64 +207,6 @@ def _download_file(url, dest_dir_path, cookie_str):
 
 
 #
-# Make argument parser
-#
-
-def _make_argument_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--course', help='Cource id', type=str,
-                        dest='course_id', metavar='<Id>', required=True)
-    parser.add_argument('-d', '--dest', help='Destination directory path',
-                        type=str, dest='dest_dir_path', metavar='<Path>',
-                        default='./')
-    parser.add_argument('-r', '--dir', help='Remote directory path',
-                        type=str, dest='remote_dir_path', metavar='<Path>')
-    return parser
-
-
-#
-# URL extactor
-#
-
-def _get_urls(url, cookie_str):
-    # Get HTML
-    req = urllib2.Request(url)
-    req.add_header('Accept', 'text/html')
-    req.add_header('Cookie', cookie_str)
-    req.add_header(
-        'User-Agent',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_0) AppleWebKit/537.36'
-        + ' (KHTML, like Gecko) Chrome/38.0.2125.111 Safari/537.36'
-    )
-    resp = urllib2.urlopen(req)
-    if resp is None or resp.code / 100 != 2:
-        return []
-    html_str = resp.read()
-    resp.close()
-
-    # Compile regular expression
-    reg_exp = re.compile(
-        r'href=\'/modules/document/document\.php\?course=([A-Z0-9]*)&amp;download=([/a-zA-Z0-9\.]*)\'',
-        re.MULTILINE & re.UNICODE & re.VERBOSE
-    )
-
-    # Run regular expressions
-    matches = re.findall(reg_exp, html_str)
-    if matches is None:
-        return []
-
-    ret_val = []
-    for course_id, path in matches:
-        if path == '/':  # ignore top level
-            continue
-        url = 'http://eclass.uoa.gr/modules/document/document.php'
-        url += '?cources=%s&download=%s' % (course_id, path)
-        ret_val.append(url)
-
-    return ret_val
-
-
-#
 # Main function
 #
 
@@ -219,11 +225,7 @@ def main():
         sys.exit(1)
 
     # Get download URLs
-    dir_url = 'http://eclass.uoa.gr/modules/document/document.php?course=%s' \
-        % args.course_id
-    if args.remote_dir_path is not None:
-        dir_url += '&openDir=%s' % args.remote_dir_path
-    urls = _get_urls(dir_url, cookie_str)
+    urls = _get_file_urls(args.course_id, args.remote_dir_path, cookie_str)
     if len(urls) == 0:
         print '[ERROR] No URLs found!'
         sys.exit(1)
