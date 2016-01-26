@@ -87,7 +87,7 @@ def _get_cookie(username, password):
 
 def _get_file_urls(course_id, remote_dir_path, cookie_str):
     # Make directory URL
-    url = 'http://eclass.uoa.gr/modules/document/document.php?course=%s' \
+    url = 'http://eclass.uoa.gr/modules/document/index.php?course=%s' \
         % course_id
     if remote_dir_path is not None:
         url += '&openDir=%s' % remote_dir_path
@@ -109,7 +109,8 @@ def _get_file_urls(course_id, remote_dir_path, cookie_str):
 
     # Compile regular expression
     reg_exp = re.compile(
-        r'href=\'/modules/document/document\.php\?course=([A-Z0-9]*)&amp;download=([/a-zA-Z0-9\.]*)\'',
+        r'href=\'/modules/document/index\.php\?course=([A-Z0-9]*)'
+        + r'&amp;download=([/a-zA-Z0-9\.]*)\'',
         re.MULTILINE & re.UNICODE & re.VERBOSE
     )
 
@@ -122,8 +123,8 @@ def _get_file_urls(course_id, remote_dir_path, cookie_str):
     for course_id, path in matches:
         if path == '/' or path == remote_dir_path:  # ignore top level
             continue
-        url = 'http://eclass.uoa.gr/modules/document/document.php'
-        url += '?cources=%s&download=%s' % (course_id, path)
+        url = 'http://eclass.uoa.gr/modules/document/index.php'
+        url += '?course=%s&download=%s' % (course_id, path)
         ret_val.append(url)
 
     return ret_val
